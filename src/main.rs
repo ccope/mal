@@ -20,9 +20,13 @@ use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 use std::env;
+use tracing::{event, instrument, Level};
+use tracing_subscriber;
 use url::Url;
 
 const PORT: i32 = 9090;
+
+#[derive(Debug)]
 struct AppState {
     oauth_client: Box<BasicClient>,
 }
@@ -30,6 +34,7 @@ struct AppState {
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
+    tracing_subscriber::fmt::init();
     let client_id = ClientId::new(env::var("CLIENT_ID".to_string())?);
     let client_secret = Some(ClientSecret::new(env::var("CLIENT_SECRET")?));
     let auth_url = AuthUrl::new(env::var("AUTH_URL")?)?;
@@ -65,6 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[instrument(skip(session))]
 fn index(session: Session) -> HttpResponse {
     let link: &str = match session.get::<bool>("login") {
         Ok(Some(x)) => { if x { "logout" } else { "login" } },
@@ -84,6 +90,7 @@ fn index(session: Session) -> HttpResponse {
     HttpResponse::Ok().body(html)
 }
 
+#[instrument]
 fn login(data: web::Data<AppState>) -> HttpResponse {
     // Create a PKCE code verifier and SHA-256 encode it as a code challenge.
     // Generate a PKCE challenge.
@@ -133,6 +140,7 @@ fn login(data: web::Data<AppState>) -> HttpResponse {
 //     Ok(token_result)
 // }
 
+#[instrument(skip(session))]
 fn logout(session: Session) -> HttpResponse {
     session.remove("login");
     HttpResponse::Found()
@@ -147,6 +155,7 @@ pub struct AuthRequest {
     scope: Option<String>,
 }
 
+#[instrument(skip(session, params))]
 fn auth(
     session: Session,
     data: web::Data<AppState>,
@@ -155,6 +164,7 @@ fn auth(
     let code = AuthorizationCode::new(params.code.clone());
     let state = CsrfToken::new(params.state.clone());
     let _scope = params.scope.clone();
+    event!(Level::INFO, "{}", params.code.clone());
 
     // Exchange the code with a token.
     let token = &data.oauth_client.exchange_code(code);
