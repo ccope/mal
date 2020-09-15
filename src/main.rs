@@ -93,7 +93,7 @@ fn login(data: web::Data<AppState>) -> HttpResponse {
     let (auth_url, csrf_token) = &data.oauth_client
         .authorize_url(CsrfToken::new_random)
         // Set the desired scopes.
-        .add_scope(Scope::new("read".to_string()))
+        //.add_scope(Scope::new("read".to_string()))
         //.add_scope(Scope::new("write".to_string()))
         // Set the PKCE code challenge.
         .set_pkce_challenge(pkce_challenge)
@@ -144,7 +144,7 @@ fn logout(session: Session) -> HttpResponse {
 pub struct AuthRequest {
     code: String,
     state: String,
-    scope: String,
+    scope: Option<String>,
 }
 
 fn auth(
