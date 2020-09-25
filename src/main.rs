@@ -18,11 +18,10 @@ use oauth2::{
 };
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::env;
 use tracing::{event, instrument, Level};
 use tracing_subscriber;
-use url::Url;
 
 const PORT: i32 = 9090;
 
@@ -103,7 +102,7 @@ async fn login(
     // Generate a PKCE challenge.
     let (pkce_challenge, _pkce_verifier) = PkceCodeChallenge::new_random_plain();
     // TODO HAX HAX HAX XXX Uses "plain" pkce challenge type, where it just resends the original
-    // code
+    // code. Switch to sha256 when MAL supports it
     session.set("PKCE", pkce_challenge.as_str()).unwrap();
     event!(Level::DEBUG, "\n\nPKCE verifier is {}\n", session.get::<String>("PKCE").unwrap().unwrap());
 
