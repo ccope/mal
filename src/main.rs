@@ -1,4 +1,4 @@
-use actix_web::{get, web, App, HttpServer, HttpResponse, Responder};
+use actix_web::{web, App, Error, HttpServer, HttpResponse, Responder};
 use actix_session::{CookieSession, Session};
 use actix_web::http::header;
 use anyhow::Result;
@@ -11,10 +11,10 @@ use oauth2::{
     CsrfToken,
     PkceCodeChallenge,
     PkceCodeVerifier,
-    RedirectUrl,
-    Scope,
-    TokenResponse,
-    TokenUrl
+    //RedirectUrl,
+    //Scope,
+    //TokenResponse,
+    TokenUrl,
 };
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_secret = Some(ClientSecret::new(env::var("CLIENT_SECRET")?));
     let auth_url = AuthUrl::new(env::var("AUTH_URL")?)?;
     let token_url = Some(TokenUrl::new(env::var("TOKEN_URL")?)?);
-    let redirect_url = RedirectUrl::new(env::var("REDIRECT_URL")?)?;
+    // let redirect_url = RedirectUrl::new(env::var("REDIRECT_URL")?)?;
 
     // Create an OAuth2 client by specifying the client ID, client secret, authorization URL and
     // token URL.
@@ -51,13 +51,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 token_url
         )
         // Set the URL the user will be redirected to after the authorization process.
-        .set_redirect_url(redirect_url)
+        // .set_redirect_url(redirect_url)
     );
 
     HttpServer::new(move || {
         App::new()
-            .data(AppState { oauth_client: client.clone() })
-            .wrap(CookieSession::signed(&[0; 32]).secure(false))
+            .data(AppState { oauth_client: client.clone()})
+            .wrap(CookieSession::signed(&[0; 32])
+                .domain("mal.camcope.me")
+                .name("mal")
+                .secure(false)
+                )
             .route("/", web::get().to(index))
             .route("/login", web::get().to(login))
             .route("/logout", web::get().to(logout))
@@ -71,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[instrument(skip(session))]
-fn index(session: Session) -> HttpResponse {
+async fn index(session: Session) -> Result<HttpResponse, Error> {
     let link: &str = match session.get::<bool>("login") {
         Ok(Some(x)) => { if x { "logout" } else { "login" } },
         _ => "login"
@@ -87,14 +91,21 @@ fn index(session: Session) -> HttpResponse {
         link, link
     );
 
-    HttpResponse::Ok().body(html)
+    Ok(HttpResponse::Ok().body(html))
 }
 
-#[instrument]
-fn login(data: web::Data<AppState>) -> HttpResponse {
+#[instrument(skip(session))]
+async fn login(
+    session: Session,
+    data: web::Data<AppState>,
+    ) -> impl Responder {
     // Create a PKCE code verifier and SHA-256 encode it as a code challenge.
     // Generate a PKCE challenge.
-    let (pkce_challenge, _pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+    let (pkce_challenge, _pkce_verifier) = PkceCodeChallenge::new_random_plain();
+    // TODO HAX HAX HAX XXX Uses "plain" pkce challenge type, where it just resends the original
+    // code
+    session.set("PKCE", pkce_challenge.as_str()).unwrap();
+    event!(Level::DEBUG, "\n\nPKCE verifier is {}\n", session.get::<String>("PKCE").unwrap().unwrap());
 
     // Generate the full auth URL to which we'll redirect the user.
     let (auth_url, csrf_token) = &data.oauth_client
@@ -106,6 +117,9 @@ fn login(data: web::Data<AppState>) -> HttpResponse {
         .set_pkce_challenge(pkce_challenge)
         .url();
 
+    event!(Level::INFO, "\n\nCSRF token is {}", csrf_token.secret());
+    // This is the URL you should redirect the user to, in order to trigger the authorization
+    // process.
     HttpResponse::Found()
         .header(header::LOCATION, auth_url.to_string())
         .finish()
@@ -115,33 +129,12 @@ fn login(data: web::Data<AppState>) -> HttpResponse {
     // authorization code. For security reasons, your code should verify that the `state`
     // parameter returned by the server matches `csrf_state`.
 
+    // TODO: store csrf_token somehow to verify later
+    // Redis? Cookies?
 
-    ///// // Generate a PKCE challenge.
-    ///// let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-
-
-    // This is the URL you should redirect the user to, in order to trigger the authorization
-    // process.
-
-
-// async fn finish_auth(client: BasicClient, pkce_verifier: PkceCodeVerifier) -> Result<TokenResponse> {
-//     // Now you can trade it for an access token.
-//     let token_result = client
-//         .exchange_code(AuthorizationCode::new("some authorization code".to_string()))
-//         // Set the PKCE code verifier.
-//         .set_pkce_verifier(pkce_verifier)
-//         .request_async(async_http_client)
-//         .await?;
-// 
-//     // Unwrapping token_result will either produce a Token or a RequestTokenError.
-// 
-//     println!("Hello, world!");
-//     println!("{:?}", token_result);
-//     Ok(token_result)
-// }
 
 #[instrument(skip(session))]
-fn logout(session: Session) -> HttpResponse {
+async fn logout(session: Session) -> HttpResponse {
     session.remove("login");
     HttpResponse::Found()
         .header(header::LOCATION, "/".to_string())
@@ -156,33 +149,46 @@ pub struct AuthRequest {
 }
 
 #[instrument(skip(session, params))]
-fn auth(
+async fn auth(
     session: Session,
     data: web::Data<AppState>,
     params: web::Query<AuthRequest>,
-) -> HttpResponse {
+) -> Result<HttpResponse, Error> {
+    event!(Level::INFO, "auth route: start");
     let code = AuthorizationCode::new(params.code.clone());
     let state = CsrfToken::new(params.state.clone());
     let _scope = params.scope.clone();
-    event!(Level::INFO, "{}", params.code.clone());
+    event!(Level::INFO, "\nauth route:\n code {:?}\n csrf token {:?}", params.code.clone(), params.state.clone());
 
-    // Exchange the code with a token.
-    let token = &data.oauth_client.exchange_code(code);
+    let verifier = PkceCodeVerifier::new(session.get::<String>("PKCE").unwrap().unwrap());
+    let token_req = data.oauth_client
+        .exchange_code(code)
+        .set_pkce_verifier(verifier);
 
-    session.set("login", true).unwrap();
+    event!(Level::DEBUG, "token req:\n\n{:?}", &token_req);
+
+    let token = token_req
+        .request_async(async_http_client)
+        .await
+        .map_err(|e| HttpResponse::InternalServerError().body(&e.to_string()))?;
+
+    event!(Level::INFO, "token {:?}", &token);
 
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
         <body>
-            API returned the following state:
+            API returned the following csrf state:
             <pre>{}</pre>
-            API returned the following token:
+            API returned the following auth token:
             <pre>{:?}</pre>
         </body>
     </html>"#,
         state.secret(),
         token
     );
-    HttpResponse::Ok().body(html)
+    session.set("token", token).unwrap();
+    event!(Level::INFO, "token cookie set");
+    session.set("login", true).unwrap();
+    Ok(HttpResponse::Ok().body(html))
 }

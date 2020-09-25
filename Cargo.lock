@@ -2406,3 +2406,7 @@ dependencies = [
  "winapi 0.2.8",
  "winapi-build",
 ]
+
+[[patch.unused]]
+name = "oauth2"
+version = "4.0.0-alpha.3"
