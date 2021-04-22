@@ -1,7 +1,15 @@
-use actix_web::{web, App, Error, HttpServer, HttpResponse, Responder};
+use actix_web::{
+    App,
+    Error,
+    HttpServer,
+    HttpResponse,
+    Responder,
+    error,
+    web, 
+};
 use actix_session::{CookieSession, Session};
 use actix_web::http::header;
-use anyhow::Result;
+//use anyhow::Result;
 use dotenv::dotenv;
 use oauth2::{
     AuthorizationCode,
@@ -9,25 +17,62 @@ use oauth2::{
     ClientId,
     ClientSecret,
     CsrfToken,
+    EmptyExtraTokenFields,
     PkceCodeChallenge,
     PkceCodeVerifier,
     //RedirectUrl,
     //Scope,
-    //TokenResponse,
+    StandardTokenResponse,
+    TokenResponse,
     TokenUrl,
 };
-use oauth2::basic::BasicClient;
+use oauth2::basic::{BasicClient, BasicTokenType};
 use oauth2::reqwest::async_http_client;
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::env;
 use tracing::{event, instrument, Level};
 use tracing_subscriber;
 
 const PORT: i32 = 9090;
+const MAL_API: &str = "https://api.myanimelist.net/v2";
 
 #[derive(Debug)]
 struct AppState {
     oauth_client: Box<BasicClient>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnimeListEntryPictures {
+    pub small: Option<String>,
+    pub medium: Option<String>,
+    pub large: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnimeListEntry {
+    pub id: i64,
+    pub title: String,
+    pub main_picture: AnimeListEntryPictures
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Datum {
+    pub node: AnimeListEntry,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Paging {
+  pub previous: Option<String>,
+  pub next: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MyAnimeListResponse {
+    pub data: Vec<Datum>,
+    pub paging: Option<Paging>,
 }
 
 #[actix_web::main]
@@ -65,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/login", web::get().to(login))
             .route("/logout", web::get().to(logout))
             .route("/auth", web::get().to(auth))
+            .route("/mylist", web::get().to(mylist))
     })
     .bind(format!("127.0.0.1:{}", PORT))
     .expect(&format!("Can not bind to port {}", PORT))
@@ -75,19 +121,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[instrument(skip(session))]
 async fn index(session: Session) -> Result<HttpResponse, Error> {
-    let link: &str = match session.get::<bool>("login") {
-        Ok(Some(x)) => { if x { "logout" } else { "login" } },
-        _ => "login"
+    let logged_in: bool = match session.get::<bool>("login") {
+        Ok(Some(x)) => { if x { true } else { false }},
+        _ => false
     };
+    let link: &str = if logged_in { "logout" } else { "login" };
 
+    match session.get::<String>("anonId") {
+        Ok(_) => (),
+        Err(_) => session.set("anonId", "1234abc").unwrap()
+    }
+
+    let access_frag = if logged_in {
+        let token = session.get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token")
+            .unwrap().unwrap()
+            .access_token()
+            .secret()
+            .clone();
+        format!("Access token is {}", token)
+    } else { "".to_string() };
+
+    let mylist_frag = if logged_in { r#"<p><a href="/mylist">Anime List</a>"# } else { "" };
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
         <body>
-            <a href="/{}">{}</a>
+            <a href="/{0}">{0}</a>
+            {1}
+            <p>
+            Access token is <p> {2}
         </body>
     </html>"#,
-        link, link
+        link, mylist_frag, access_frag
     );
 
     Ok(HttpResponse::Ok().body(html))
@@ -157,21 +222,18 @@ async fn auth(
     let code = AuthorizationCode::new(params.code.clone());
     let state = CsrfToken::new(params.state.clone());
     let _scope = params.scope.clone();
-    event!(Level::INFO, "\nauth route:\n code {:?}\n csrf token {:?}", params.code.clone(), params.state.clone());
 
     let verifier = PkceCodeVerifier::new(session.get::<String>("PKCE").unwrap().unwrap());
     let token_req = data.oauth_client
         .exchange_code(code)
         .set_pkce_verifier(verifier);
 
-    event!(Level::DEBUG, "token req:\n\n{:?}", &token_req);
-
     let token = token_req
         .request_async(async_http_client)
         .await
         .map_err(|e| HttpResponse::InternalServerError().body(&e.to_string()))?;
 
-    event!(Level::INFO, "token {:?}", &token);
+    event!(Level::DEBUG, "token {:?}", &token);
 
     let html = format!(
         r#"<html>
@@ -181,13 +243,35 @@ async fn auth(
             <pre>{}</pre>
             API returned the following auth token:
             <pre>{:?}</pre>
+            <a href="/">Home</a>
         </body>
     </html>"#,
         state.secret(),
-        token
+        token.access_token().secret()
     );
     session.set("token", token).unwrap();
     event!(Level::INFO, "token cookie set");
     session.set("login", true).unwrap();
     Ok(HttpResponse::Ok().body(html))
+}
+
+#[instrument(skip(session))]
+async fn mylist(
+    session: Session,
+    data: web::Data<AppState>,
+) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
+    event!(Level::INFO, "entered mylist route");
+    let token = session.get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token").unwrap().unwrap();
+    let client = reqwest::Client::new();
+    let res = client.get(&(MAL_API.to_string() + "/users/@me/animelist"))
+        .query(&[("limit", "1000")])
+        .bearer_auth(token.access_token().secret())
+        .send()
+        .await
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    let resp: MyAnimeListResponse = res.json()
+        .await
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    let anime: Vec<AnimeListEntry> = resp.data.into_iter().map(|x| x.node).collect();
+    Ok(web::Json(anime))
 }
