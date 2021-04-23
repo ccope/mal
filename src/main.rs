@@ -33,7 +33,8 @@ use serde::{
     Serialize,
 };
 use std::env;
-use tracing::{event, instrument, Level};
+use std::fs::File;
+use tracing::{error, event, instrument, Level};
 use tracing_subscriber;
 
 const PORT: i32 = 9090;
@@ -149,7 +150,7 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
             <a href="/{0}">{0}</a>
             {1}
             <p>
-            Access token is <p> {2}
+            {2}
         </body>
     </html>"#,
         link, mylist_frag, access_frag
@@ -223,7 +224,7 @@ async fn auth(
     let state = CsrfToken::new(params.state.clone());
     let _scope = params.scope.clone();
 
-    let verifier = PkceCodeVerifier::new(session.get::<String>("PKCE").unwrap().unwrap());
+    let verifier = session.get::<PkceCodeVerifier>("PKCE")?.ok_or_else(|| error::ErrorBadRequest("No PKCE verifier found"))?;
     let token_req = data.oauth_client
         .exchange_code(code)
         .set_pkce_verifier(verifier);
@@ -261,14 +262,22 @@ async fn mylist(
     data: web::Data<AppState>,
 ) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
     event!(Level::INFO, "entered mylist route");
-    let token = session.get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token").unwrap().unwrap();
+    let token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType> = session.get("token")?.ok_or_else(|| error::ErrorBadRequest("no token"))?;
     let client = reqwest::Client::new();
     let res = client.get(&(MAL_API.to_string() + "/users/@me/animelist"))
         .query(&[("limit", "1000")])
         .bearer_auth(token.access_token().secret())
         .send()
         .await
-        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+        .map_err(|e| {
+            error!("fetch failed, {}", &e);
+            error::ErrorInternalServerError(e.to_string())
+        })?;
+    event!(Level::INFO, "successful MAL fetch");
+    event!(Level::DEBUG, "my list response\n{:?}", &res);
+    if res.status() != 200 {
+        return Err(error::ErrorInternalServerError(format!("{:?}", res)));
+    }
     let resp: MyAnimeListResponse = res.json()
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
