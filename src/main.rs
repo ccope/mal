@@ -129,7 +129,7 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
 
     match session.get::<String>("anonId") {
         Ok(_) => (),
-        Err(_) => session.set("anonId", "1234abc").unwrap()
+        Err(_) => session.insert("anonId", "1234abc").unwrap()
     }
 
     let access_frag = if logged_in {
@@ -168,7 +168,7 @@ async fn login(
     let (pkce_challenge, _pkce_verifier) = PkceCodeChallenge::new_random_plain();
     // TODO HAX HAX HAX XXX Uses "plain" pkce challenge type, where it just resends the original
     // code. Switch to sha256 when MAL supports it
-    session.set("PKCE", pkce_challenge.as_str()).unwrap();
+    session.insert("PKCE", pkce_challenge.as_str()).unwrap();
     event!(Level::DEBUG, "\n\nPKCE verifier is {}\n", session.get::<String>("PKCE").unwrap().unwrap());
 
     // Generate the full auth URL to which we'll redirect the user.
@@ -185,7 +185,7 @@ async fn login(
     // This is the URL you should redirect the user to, in order to trigger the authorization
     // process.
     HttpResponse::Found()
-        .header(header::LOCATION, auth_url.to_string())
+        .append_header((header::LOCATION, auth_url.to_string()))
         .finish()
 }
 
@@ -201,7 +201,7 @@ async fn login(
 async fn logout(session: Session) -> HttpResponse {
     session.remove("login");
     HttpResponse::Found()
-        .header(header::LOCATION, "/".to_string())
+        .append_header((header::LOCATION, "/".to_string()))
         .finish()
 }
 
@@ -231,7 +231,7 @@ async fn auth(
     let token = token_req
         .request_async(async_http_client)
         .await
-        .map_err(|e| HttpResponse::InternalServerError().body(&e.to_string()))?;
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
 
     event!(Level::DEBUG, "token {:?}", &token);
 
@@ -249,9 +249,9 @@ async fn auth(
         state.secret(),
         token.access_token().secret()
     );
-    session.set("token", token).unwrap();
+    session.insert("token", token).unwrap();
     event!(Level::INFO, "token cookie set");
-    session.set("login", true).unwrap();
+    session.insert("login", true).unwrap();
     Ok(HttpResponse::Ok().body(html))
 }
 

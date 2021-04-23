@@ -8,19 +8,21 @@ edition = "2018"
 
 [dependencies]
 anyhow = "*"
-actix-web = "3"
-actix-session = "0.4"
+#actix-web = "4.0.0-beta.6"
+actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
+actix-session = "0.5.0-beta.1"
 dotenv = "0.15"
 futures = "*"
 oauth2 = { version = "4.0.0", features = ["pkce-plain"] }
-reqwest = { version = "0.10", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = "0.2"
 url = "*"
 
-#[patch.crates-io]
+[patch.crates-io]
 #"oauth2" = { path = "./oauth2-rs" }
+"actix-session" = { path = "./vendor/actix-extras/actix-session" }
