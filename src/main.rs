@@ -282,5 +282,6 @@ async fn mylist(
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     let anime: Vec<AnimeListEntry> = resp.data.into_iter().map(|x| x.node).collect();
+    serde_json::to_writer(&File::create("./data/animelist.json")?, &anime).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     Ok(web::Json(anime))
 }
