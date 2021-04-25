@@ -291,15 +291,15 @@ async fn mylist(
             error!("fetch failed, {}", &e);
             error::ErrorInternalServerError(e.to_string())
         })?;
-    event!(Level::INFO, "successful MAL fetch");
     event!(Level::DEBUG, "my list response\n{:?}", &res);
     if res.status() != 200 {
         return Err(error::ErrorInternalServerError(format!("{:?}", res)));
     }
-    let resp: MyAnimeListResponse = res.json()
+    event!(Level::INFO, "successful MAL fetch");
+    let res_obj: MyAnimeListResponse = res.json()
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-    let anime: Vec<AnimeListEntry> = resp.data.into_iter().map(|x| x.node).collect();
+    let anime: Vec<AnimeListEntry> = res_obj.data.into_iter().map(|x| x.node).collect();
     serde_json::to_writer(&File::create("./data/animelist.json")?, &anime).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     Ok(web::Json(anime))
 }
