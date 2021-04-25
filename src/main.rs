@@ -11,6 +11,8 @@ use actix_session::{CookieSession, Session};
 use actix_web::http::header;
 //use anyhow::Result;
 use dotenv::dotenv;
+use governor::{Quota, RateLimiter};
+use nonzero_ext::nonzero;
 use oauth2::{
     AuthorizationCode,
     AuthUrl,
@@ -56,6 +58,7 @@ pub struct AnimeListEntryPictures {
 pub struct AnimeListEntry {
     pub id: i64,
     pub title: String,
+    pub english_title: Option<String>,
     pub main_picture: AnimeListEntryPictures
 }
 
@@ -74,6 +77,17 @@ pub struct Paging {
 pub struct MyAnimeListResponse {
     pub data: Vec<Datum>,
     pub paging: Option<Paging>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MALTitleTypes {
+    synonyms: Option<Vec<String>>,
+    en: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MALAltTitleResponse {
+    alternative_titles: MALTitleTypes
 }
 
 #[actix_web::main]
@@ -112,6 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/logout", web::get().to(logout))
             .route("/auth", web::get().to(auth))
             .route("/mylist", web::get().to(mylist))
+            .route("/updatelist", web::get().to(update_list))
     })
     .bind(format!("127.0.0.1:{}", PORT))
     .expect(&format!("Can not bind to port {}", PORT))
@@ -143,6 +158,7 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
     } else { "".to_string() };
 
     let mylist_frag = if logged_in { r#"<p><a href="/mylist">Anime List</a>"# } else { "" };
+    let updatemylist_frag = if logged_in { r#"<p><a href="/updatelist">Update List</a>"# } else { "" };
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
@@ -151,9 +167,11 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
             {1}
             <p>
             {2}
+            <p>
+            {3}
         </body>
     </html>"#,
-        link, mylist_frag, access_frag
+        link, mylist_frag, updatemylist_frag, access_frag
     );
 
     Ok(HttpResponse::Ok().body(html))
@@ -283,5 +301,37 @@ async fn mylist(
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     let anime: Vec<AnimeListEntry> = resp.data.into_iter().map(|x| x.node).collect();
     serde_json::to_writer(&File::create("./data/animelist.json")?, &anime).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    Ok(web::Json(anime))
+}
+
+async fn update_list(
+    session: Session,
+    data: web::Data<AppState>,
+) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
+    let token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType> = session.get("token")?.ok_or_else(|| error::ErrorBadRequest("no token"))?;
+    let mut anime: Vec<AnimeListEntry> = serde_json::from_reader(&File::open("./data/animelist.json")?).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    let client = reqwest::Client::new();
+    let lim = RateLimiter::direct(Quota::per_second(nonzero!(2u32)));
+    for a in anime.iter_mut() {
+        lim.until_ready().await;
+        let res = client.get(&(MAL_API.to_string() + "/anime/" + &a.id.to_string()))
+            .query(&[("fields", "alternative_titles")])
+            .bearer_auth(token.access_token().secret())
+            .send()
+            .await
+            .map_err(|e| {
+                error!("fetch failed, {}", &e);
+                error::ErrorInternalServerError(e.to_string())
+            })?;
+        event!(Level::DEBUG, "title response\n{:?}", &res);
+        if res.status() != 200 {
+            return Err(error::ErrorInternalServerError(format!("{:?}", res)));
+        }
+        let res_obj: MALAltTitleResponse = res.json()
+            .await
+            .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+        a.english_title = res_obj.alternative_titles.en;
+    }
+    serde_json::to_writer(&File::create("./data/animelist_titled.json")?, &anime).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     Ok(web::Json(anime))
 }
