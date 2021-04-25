@@ -26,5 +26,7 @@ tracing-subscriber = "0.2"
 url = "*"
 
 [patch.crates-io]
-#"oauth2" = { path = "./oauth2-rs" }
 "actix-session" = { path = "./vendor/actix-extras/actix-session" }
+"indexmap" = { git = "https://github.com/cuviper/indexmap.git", branch = "hashbrown-0.11" }
+# Bump hashbrown dep
+"no-std-compat" = { path = "./vendor/no-std-compat" }
