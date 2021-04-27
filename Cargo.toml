@@ -11,6 +11,7 @@ anyhow = "*"
 #actix-web = "4.0.0-beta.6"
 actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
 actix-session = "0.5.0-beta.1"
+chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
 futures = "*"
 governor = "0.3"

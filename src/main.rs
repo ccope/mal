@@ -10,6 +10,8 @@ use actix_web::{
 use actix_session::{CookieSession, Session};
 use actix_web::http::header;
 //use anyhow::Result;
+use chrono::prelude::*;
+use chrono::Duration;
 use dotenv::dotenv;
 use governor::{Quota, RateLimiter};
 use nonzero_ext::nonzero;
@@ -178,6 +180,54 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
 }
 
 #[instrument(skip(session))]
+async fn get_live_token(session: Session, data: web::Data<AppState>) -> Result<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> {
+    let token = session
+        .get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token")
+        .unwrap_or(None);
+    let token_expiry = session
+        .get::<DateTime<Utc>>("token_expires")
+        .unwrap_or(None);
+    match (token, token_expiry) {
+        (Some(t), Some(e)) => {
+            if Utc::now() < e {
+                return Ok(t);
+            } else {
+                return refresh_token(&t, data, &session).await;
+            }
+        }
+        (Some(t), None) => return refresh_token(&t, data, &session).await,
+        _ => return Err(error::ErrorNetworkAuthenticationRequired("no valid token")),
+    };
+}
+
+#[instrument(skip(session))]
+async fn refresh_token(
+    token: &StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
+    data: web::Data<AppState>,
+    session: &Session,
+) -> Result<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>> {
+    let refresh = token
+        .refresh_token()
+        .ok_or_else(|| error::ErrorBadRequest("no refresh token"))?;
+    let new_token = data
+        .oauth_client
+        .exchange_refresh_token(refresh)
+        .request_async(async_http_client)
+        .await
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+    let expiry: DateTime<Utc> = Utc::now()
+        + Duration::from_std(
+            new_token
+                .expires_in()
+                .ok_or_else(|| error::ErrorInternalServerError("no token expiry"))?,
+        )
+        .map_err(|e| error::ErrorInternalServerError(e))?;
+    session.insert("token", new_token.clone())?;
+    session.insert("token_expires", expiry)?;
+    Ok(new_token)
+}
+
+#[instrument(skip(session))]
 async fn login(
     session: Session,
     data: web::Data<AppState>,
@@ -268,7 +318,15 @@ async fn auth(
         state.secret(),
         token.access_token().secret()
     );
-    session.insert("token", token).unwrap();
+    let expiry: DateTime<Utc> = Utc::now()
+        + Duration::from_std(
+            token
+                .expires_in()
+                .ok_or_else(|| error::ErrorInternalServerError("no token expiry"))?,
+        )
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    session.insert("token", token.clone()).unwrap();
+    session.insert("token_expires", expiry).unwrap();
     event!(Level::INFO, "token cookie set");
     session.insert("login", true).unwrap();
     Ok(HttpResponse::Ok().body(html))
@@ -280,7 +338,7 @@ async fn mylist(
     data: web::Data<AppState>,
 ) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
     event!(Level::INFO, "entered mylist route");
-    let token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType> = session.get("token")?.ok_or_else(|| error::ErrorBadRequest("no token"))?;
+    let token = get_live_token(session, data).await?;
     let client = reqwest::Client::new();
     let res = client.get(&(MAL_API.to_string() + "/users/@me/animelist"))
         .query(&[("limit", "1000")])
@@ -308,7 +366,7 @@ async fn update_list(
     session: Session,
     data: web::Data<AppState>,
 ) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
-    let token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType> = session.get("token")?.ok_or_else(|| error::ErrorBadRequest("no token"))?;
+    let token = get_live_token(session, data).await?;
     let mut anime: Vec<AnimeListEntry> = serde_json::from_reader(&File::open("./data/animelist.json")?).map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     let client = reqwest::Client::new();
     let lim = RateLimiter::direct(Quota::per_second(nonzero!(2u32)));
