@@ -108,40 +108,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[instrument(skip(session))]
 async fn index(session: Session) -> Result<HttpResponse, Error> {
     let logged_in: bool = match session.get::<bool>("login") {
-        Ok(Some(x)) => { if x { true } else { false }},
-        _ => false
+        Ok(Some(x)) => x,
+        _ => false,
     };
     let link: &str = if logged_in { "logout" } else { "login" };
 
     match session.get::<String>("anonId") {
-        Ok(_) => (),
-        Err(_) => session.insert("anonId", "1234abc").unwrap()
+        Ok(Some(_)) => (),
+        _ => session.insert("anonId", "1234abc").unwrap_or(()),
     }
 
-    let access_frag = if logged_in {
-        let token = session.get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token")
-            .unwrap().unwrap()
-            .access_token()
-            .secret()
-            .clone();
-        format!("Access token is {}", token)
-    } else { "".to_string() };
-
-    let mylist_frag = if logged_in { r#"<p><a href="/mylist">Anime List</a>"# } else { "" };
-    let updatemylist_frag = if logged_in { r#"<p><a href="/updatelist">Update List</a>"# } else { "" };
+    let mut logged_in_content: Vec<String> = Vec::new();
+    if logged_in {
+        let token = session
+            .get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token")
+            .unwrap_or(None);
+        if let Some(_) = token {
+            logged_in_content.push(r#"<p><a href="/mylist">Anime List</a>"#.to_string());
+            logged_in_content.push(r#"<p><a href="/updatelist">Update List</a>"#.to_string());
+        };
+    };
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
         <body>
             <a href="/{0}">{0}</a>
+            <p>
             {1}
-            <p>
-            {2}
-            <p>
-            {3}
         </body>
     </html>"#,
-        link, mylist_frag, updatemylist_frag, access_frag
+        link,
+        logged_in_content.join("\n<p>\n")
     );
 
     Ok(HttpResponse::Ok()
