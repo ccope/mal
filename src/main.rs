@@ -10,10 +10,12 @@ use actix_web::{
 use actix_session::{CookieSession, Session};
 use actix_web::http::header;
 //use anyhow::Result;
+use actix_web::http::header::ContentType;
 use chrono::prelude::*;
 use chrono::Duration;
 use dotenv::dotenv;
 use governor::{Quota, RateLimiter};
+use mime::TEXT_HTML_UTF_8;
 use nonzero_ext::nonzero;
 use oauth2::{
     AuthorizationCode,
@@ -176,7 +178,9 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
         link, mylist_frag, updatemylist_frag, access_frag
     );
 
-    Ok(HttpResponse::Ok().body(html))
+    Ok(HttpResponse::Ok()
+        .insert_header(ContentType(TEXT_HTML_UTF_8))
+        .body(html))
 }
 
 #[instrument(skip(session))]
