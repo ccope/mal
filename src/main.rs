@@ -42,56 +42,22 @@ use std::env;
 use std::fs::File;
 use tracing::{error, event, instrument, Level};
 use tracing_subscriber;
+mod my_mal;
+use crate::my_mal::*;
 
 const PORT: i32 = 9090;
 const MAL_API: &str = "https://api.myanimelist.net/v2";
 
 #[derive(Debug)]
-struct AppState {
+pub struct AppState {
     oauth_client: Box<BasicClient>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AnimeListEntryPictures {
-    pub small: Option<String>,
-    pub medium: Option<String>,
-    pub large: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AnimeListEntry {
-    pub id: i64,
-    pub title: String,
-    pub english_title: Option<String>,
-    pub main_picture: AnimeListEntryPictures
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Datum {
-    pub node: AnimeListEntry,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Paging {
-  pub previous: Option<String>,
-  pub next: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MyAnimeListResponse {
-    pub data: Vec<Datum>,
-    pub paging: Option<Paging>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MALTitleTypes {
-    synonyms: Option<Vec<String>>,
-    en: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MALAltTitleResponse {
-    alternative_titles: MALTitleTypes
+#[derive(Deserialize)]
+pub struct AuthRequest {
+    code: String,
+    state: String,
+    scope: Option<String>,
 }
 
 #[actix_web::main]
@@ -276,13 +242,6 @@ async fn logout(session: Session) -> HttpResponse {
     HttpResponse::Found()
         .append_header((header::LOCATION, "/".to_string()))
         .finish()
-}
-
-#[derive(Deserialize)]
-pub struct AuthRequest {
-    code: String,
-    state: String,
-    scope: Option<String>,
 }
 
 #[instrument(skip(session, params))]
