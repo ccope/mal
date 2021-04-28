@@ -253,7 +253,7 @@ async fn auth(
     let token = token_req
         .request_async(async_http_client)
         .await
-        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+        .map_err(|e| error::ErrorInternalServerError(e))?;
 
     event!(Level::DEBUG, "token {:?}", &token);
 
