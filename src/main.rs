@@ -300,10 +300,10 @@ async fn mylist(
     let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string()].join("</th><th>");
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
-        let title: String = if a.english_title.clone().and_then(|t| Some(t.contains(&a.title))).or(Some(false)).unwrap() {
+        let title: String = if a.english_title.as_ref().and_then(|t| Some(t.contains(&a.title))).unwrap_or(false) {
             a.english_title.clone().unwrap()
-        } else if a.english_title.clone().unwrap_or("".to_string()).len() > 0 {
-            format!("{} ({})", (a.english_title.clone().unwrap()), (&a.title).clone())
+        } else if a.english_title.as_ref().unwrap_or(&"".to_string()).len() > 0 {
+            format!("{} ({})", (a.english_title.as_ref().unwrap()), (&a.title).clone())
         } else {
             a.title.clone()
         };
