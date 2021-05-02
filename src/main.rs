@@ -1,3 +1,4 @@
+use actix_files::Files;
 use actix_session::{CookieSession, Session};
 use actix_web::http::header;
 use actix_web::http::header::ContentType;
@@ -71,6 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .data(AppState {
                 oauth_client: client.clone(),
             })
+            .service(Files::new("/static", "./static").prefer_utf8(true).use_etag(true))
             .wrap(
                 CookieSession::signed(&[0; 32])
                     .domain("mal.camcope.me")
