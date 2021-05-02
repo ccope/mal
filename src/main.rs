@@ -291,13 +291,74 @@ async fn auth(
 async fn mylist(
     session: Session,
     data: web::Data<AppState>,
-) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
+) -> Result<actix_web::HttpResponse, Error> {
     event!(Level::INFO, "entered mylist route");
+    let anime: Vec<AnimeListEntry> =
+        serde_json::from_reader(&File::open("./data/animelist.json")?)
+            .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+
+    let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string()].join("</th><th>");
+    let mut anime_table_contents = String::with_capacity(1048576);
+    for a in anime.iter() {
+        let title: String = if a.english_title.clone().and_then(|t| Some(t.contains(&a.title))).or(Some(false)).unwrap() {
+            a.english_title.clone().unwrap()
+        } else if a.english_title.clone().unwrap_or("".to_string()).len() > 0 {
+            format!("{} ({})", (a.english_title.clone().unwrap()), (&a.title).clone())
+        } else {
+            a.title.clone()
+        };
+        let rating: String = match &a.my_list_status {
+            Some(s) => format!("{}", s.score.clone()),
+            _ => "".to_string(),
+        };
+        anime_table_contents.push_str("<tr><td>");
+        let row = vec![
+            a.main_picture.small.clone().unwrap_or("".to_string()),
+            title,
+            rating,
+        ];
+        let row_s: String = row.join("</td><td>").into();
+        anime_table_contents.push_str(&row_s);
+        anime_table_contents.push_str("</td></tr>");
+    }
+    let html = format!(
+        r#"<html>
+        <head>
+        <title>Cam's Anime List</title>
+        <script src="static/sorttable.js"></script>
+        </head>
+        <body>
+            <p>
+            <table class="sortable">
+            <thead>
+              <tr><th>{}</th></tr>
+            </thead>
+            <tbody>
+            {}
+            </tbody>
+            </table>
+        </body>
+    </html>"#,
+        table_columns,
+        anime_table_contents,
+    );
+    Ok(HttpResponse::Ok()
+        .insert_header(ContentType(TEXT_HTML_UTF_8))
+        .body(html))
+}
+
+async fn update_list(
+    session: Session,
+    data: web::Data<AppState>,
+) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
     let token = get_live_token(session, data).await?;
     let client = reqwest::Client::new();
     let res = client
         .get(&(MAL_API.to_string() + "/users/@me/animelist"))
-        .query(&[("limit", "1000")])
+        .query(&[
+            ("limit", "1000"),
+            ("fields", "id,title,status,score,start_date"),
+        ])
         .bearer_auth(token.access_token().secret())
         .send()
         .await
@@ -314,21 +375,7 @@ async fn mylist(
         .json()
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-    let anime: Vec<AnimeListEntry> = res_obj.data.into_iter().map(|x| x.node).collect();
-    serde_json::to_writer(&File::create("./data/animelist.json")?, &anime)
-        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-    Ok(web::Json(anime))
-}
-
-async fn update_list(
-    session: Session,
-    data: web::Data<AppState>,
-) -> Result<web::Json<Vec<AnimeListEntry>>, Error> {
-    let token = get_live_token(session, data).await?;
-    let mut anime: Vec<AnimeListEntry> =
-        serde_json::from_reader(&File::open("./data/animelist.json")?)
-            .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-    let client = reqwest::Client::new();
+    let mut anime: Vec<AnimeListEntry> = res_obj.data.into_iter().map(|x| x.node).collect();
     let lim = RateLimiter::direct(Quota::per_second(nonzero!(2u32)));
     for a in anime.iter_mut() {
         lim.until_ready().await;
@@ -352,7 +399,7 @@ async fn update_list(
             .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
         a.english_title = res_obj.alternative_titles.en;
     }
-    serde_json::to_writer(&File::create("./data/animelist_titled.json")?, &anime)
+    serde_json::to_writer(&File::create("./data/animelist.json")?, &anime)
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     Ok(web::Json(anime))
 }
