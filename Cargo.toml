@@ -14,9 +14,7 @@ actix-session = "0.5.0-beta.1"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
 futures = "*"
-governor = "0.3"
 mime = "*"
-nonzero_ext = "*"
 oauth2 = { version = "4.0.0", features = ["pkce-plain"] }
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -37,5 +35,3 @@ actix-session = { path = "./vendor/actix-extras/actix-session" }
 #actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
 actix-web = { path = "vendor/actix-web", default_features = false, features = ["cookies"] }
 indexmap = { git = "https://github.com/cuviper/indexmap.git", branch = "hashbrown-0.11" }
-# Bump hashbrown dep
-no-std-compat = { path = "./vendor/no-std-compat" }
