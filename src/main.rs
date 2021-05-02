@@ -319,8 +319,12 @@ async fn mylist(
             _ => "".to_string(),
         };
         anime_table_contents.push_str("<tr><td>");
+        let pic: String = match &a.main_picture.medium {
+           Some(s) => format!("<img src=\"{}\"", s.clone()),
+           _ => "".to_string(),
+        };
         let row = vec![
-            a.main_picture.small.clone().unwrap_or("".to_string()),
+            pic,
             title,
             rating,
         ];
