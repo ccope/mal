@@ -320,7 +320,7 @@ async fn mylist(
         };
         anime_table_contents.push_str("<tr><td>");
         let pic: String = match &a.main_picture.medium {
-           Some(s) => format!("<img src=\"{}\"", s.clone()),
+           Some(s) => format!(r#"<img src="{}" style="height:5vw">"#, s.clone()),
            _ => "".to_string(),
         };
         let row = vec![
