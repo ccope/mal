@@ -387,7 +387,7 @@ async fn update_list(
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     event!(Level::DEBUG, "raw result:\n{:#?}", &res_text);
-    let mut anime: Vec<AnimeListEntry> = serde_json::from_str(&res_text)
+    let anime: Vec<AnimeListEntry> = serde_json::from_str(&res_text)
         .and_then(|r: MyAnimeListResponse| Ok(r.data.into_iter()
             .map(|x| x.node)
             .collect()))
