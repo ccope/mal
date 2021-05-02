@@ -1,6 +1,7 @@
 use chrono::{
     NaiveDate,
-    NaiveDateTime,
+    DateTime,
+    Utc,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Debug;
@@ -47,7 +48,7 @@ pub struct UserAnimeListStatus {
     pub rewatch_value: Option<u8>,
     pub tags: Option<Vec<String>>,
     pub comments: Option<String>,
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
