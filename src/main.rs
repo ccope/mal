@@ -119,7 +119,7 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
-        <body>
+        <body style="background-color:#121212; color:#D3D3D3">
             <a href="/{0}">{0}</a>
             <p>
             {1}
@@ -262,7 +262,7 @@ async fn auth(
     let html = format!(
         r#"<html>
         <head><title>OAuth2 Test</title></head>
-        <body>
+        <body style="background-color:#121212; color:#D3D3D3">
             API returned the following csrf state:
             <pre>{}</pre>
             API returned the following auth token:
@@ -338,7 +338,7 @@ async fn mylist(
         <title>Cam's Anime List</title>
         <script src="static/sorttable.js"></script>
         </head>
-        <body>
+        <body style="background-color:#121212; color:#D3D3D3">
             <p>
             <table class="sortable">
             <thead>
