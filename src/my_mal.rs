@@ -15,13 +15,14 @@ pub struct AnimeListEntryPictures {
     pub large: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AnimeListEntry {
     pub id: i64,
     pub title: String,
-    pub english_title: Option<String>,
+    pub alternative_titles: MALTitleTypes,
     pub main_picture: AnimeListEntryPictures,
     pub my_list_status: Option<UserAnimeListStatus>,
+    pub start_date: Option<NaiveDate>,
 }
 
 #[derive(Clone, Debug, PartialEq, EnumString, IntoStaticStr)]
@@ -75,8 +76,9 @@ pub struct MALTitleTypes {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MALAltTitleResponse {
+pub struct AnimeDetailResponse {
     pub alternative_titles: MALTitleTypes,
+    pub start_date: Option<NaiveDate>,
 }
 
 impl Serialize for UserWatchStatus {

@@ -297,7 +297,7 @@ async fn mylist(
         serde_json::from_reader(&File::open("./data/animelist.json")?)
             .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
 
-    let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string()].join("</th><th>");
+    let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string(), "Aired".to_string()].join("</th><th>");
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
         match a.my_list_status.as_ref()
@@ -307,10 +307,10 @@ async fn mylist(
             UserWatchStatus::Watching => (),
             _ => continue,
         };
-        let title: String = if a.english_title.as_ref().and_then(|t| Some(t.contains(&a.title))).unwrap_or(false) {
-            a.english_title.clone().unwrap()
-        } else if a.english_title.as_ref().unwrap_or(&"".to_string()).len() > 0 {
-            format!("{} ({})", (a.english_title.as_ref().unwrap()), (&a.title).clone())
+        let title: String = if a.alternative_titles.en.as_ref().and_then(|t| Some(t.contains(&a.title))).unwrap_or(false) {
+            a.alternative_titles.en.clone().unwrap()
+        } else if a.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
+            format!("{} ({})", (a.alternative_titles.en.as_ref().unwrap()), (&a.title).clone())
         } else {
             a.title.clone()
         };
@@ -327,6 +327,7 @@ async fn mylist(
             pic,
             title,
             rating,
+            a.start_date.and_then(|d| Some(d.to_string())).unwrap_or("".to_string()),
         ];
         let row_s: String = row.join("</td><td>").into();
         anime_table_contents.push_str(&row_s);
@@ -368,8 +369,8 @@ async fn update_list(
         .get(&(MAL_API.to_string() + "/users/@me/animelist"))
         .query(&[
             ("limit", "1000"),
-            ("fields", "id,title,my_list_status"),
-            ("nsfw", "true"),
+            ("fields", "id,title,alternative_titles,my_list_status,start_date"),
+            //("nsfw", "true"),
         ])
         .bearer_auth(token.access_token().secret())
         .send()
@@ -383,34 +384,19 @@ async fn update_list(
         return Err(error::ErrorInternalServerError(format!("{:?}", res)));
     }
     event!(Level::INFO, "successful MAL fetch");
-    let res_obj: MyAnimeListResponse = res
-        .json()
+    let res_text: String = res
+        .text()
         .await
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-    let mut anime: Vec<AnimeListEntry> = res_obj.data.into_iter().map(|x| x.node).collect();
-    let lim = RateLimiter::direct(Quota::per_second(nonzero!(2u32)));
-    for a in anime.iter_mut() {
-        lim.until_ready().await;
-        let res = client
-            .get(&(MAL_API.to_string() + "/anime/" + &a.id.to_string()))
-            .query(&[("fields", "alternative_titles")])
-            .bearer_auth(token.access_token().secret())
-            .send()
-            .await
-            .map_err(|e| {
-                error!("fetch failed, {}", &e);
-                error::ErrorInternalServerError(e.to_string())
-            })?;
-        event!(Level::DEBUG, "title response\n{:?}", &res);
-        if res.status() != 200 {
-            return Err(error::ErrorInternalServerError(format!("{:?}", res)));
-        }
-        let res_obj: MALAltTitleResponse = res
-            .json()
-            .await
-            .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
-        a.english_title = res_obj.alternative_titles.en;
-    }
+    event!(Level::DEBUG, "raw result:\n{:#?}", &res_text);
+    let mut anime: Vec<AnimeListEntry> = serde_json::from_str(&res_text)
+        .and_then(|r: MyAnimeListResponse| Ok(r.data.into_iter()
+            .map(|x| x.node)
+            .collect()))
+        .map_err(|e| {
+            error!("fetch failed, {}", &e);
+            error::ErrorInternalServerError(web::Json(res_text))
+        })?;
     serde_json::to_writer(&File::create("./data/animelist.json")?, &anime)
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     Ok(web::Json(anime))
