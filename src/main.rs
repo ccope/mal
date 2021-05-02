@@ -315,7 +315,7 @@ async fn mylist(
             a.title.clone()
         };
         let rating: String = match &a.my_list_status {
-            Some(s) => format!("{}", s.score.clone()),
+            Some(s) => if s.score > 0 { format!("{}", s.score.clone()) } else { "".to_string() },
             _ => "".to_string(),
         };
         anime_table_contents.push_str("<tr><td>");
