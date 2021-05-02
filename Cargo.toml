@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 anyhow = "*"
-#actix-web = "4.0.0-beta.6"
-actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
+actix-files = "0.6.0-beta.4"
+actix-web = "4.0.0-beta.6"
 actix-session = "0.5.0-beta.1"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
@@ -30,7 +30,12 @@ tracing-subscriber = "0.2"
 url = "*"
 
 [patch.crates-io]
-"actix-session" = { path = "./vendor/actix-extras/actix-session" }
-"indexmap" = { git = "https://github.com/cuviper/indexmap.git", branch = "hashbrown-0.11" }
+actix-files = { path = "vendor/actix-web/actix-files" }
+actix-http = { path = "vendor/actix-web/actix-http" }
+actix-service = { git = "https://github.com/actix/actix-net" }
+actix-session = { path = "./vendor/actix-extras/actix-session" }
+#actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
+actix-web = { path = "vendor/actix-web", default_features = false, features = ["cookies"] }
+indexmap = { git = "https://github.com/cuviper/indexmap.git", branch = "hashbrown-0.11" }
 # Bump hashbrown dep
-"no-std-compat" = { path = "./vendor/no-std-compat" }
+no-std-compat = { path = "./vendor/no-std-compat" }
