@@ -357,7 +357,8 @@ async fn update_list(
         .get(&(MAL_API.to_string() + "/users/@me/animelist"))
         .query(&[
             ("limit", "1000"),
-            ("fields", "id,title,status,score,start_date"),
+            ("fields", "id,title,my_list_status"),
+            ("nsfw", "true"),
         ])
         .bearer_auth(token.access_token().secret())
         .send()
