@@ -300,6 +300,13 @@ async fn mylist(
     let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string()].join("</th><th>");
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
+        match a.my_list_status.as_ref()
+            .and_then(|l| Some(&l.status))
+            .unwrap_or(&UserWatchStatus::Other("None".to_string())) {
+            UserWatchStatus::Completed => (),
+            UserWatchStatus::Watching => (),
+            _ => continue,
+        };
         let title: String = if a.english_title.as_ref().and_then(|t| Some(t.contains(&a.title))).unwrap_or(false) {
             a.english_title.clone().unwrap()
         } else if a.english_title.as_ref().unwrap_or(&"".to_string()).len() > 0 {
