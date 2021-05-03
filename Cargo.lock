@@ -731,6 +731,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gestalt_ratio"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6b3c399c9a90b4de1792c277efc74b451ddeb4c2cfc11ac0b2f0503918f48ed"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1101,6 +1110,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "futures",
+ "gestalt_ratio",
  "mime",
  "oauth2",
  "reqwest",

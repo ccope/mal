@@ -6,6 +6,7 @@ use actix_web::{error, web, App, Error, HttpResponse, HttpServer, Responder, Res
 use chrono::prelude::*;
 use chrono::Duration;
 use dotenv::dotenv;
+use gestalt_ratio::gestalt_ratio;
 use mime::TEXT_HTML_UTF_8;
 use oauth2::basic::{BasicClient, BasicTokenType};
 use oauth2::reqwest::async_http_client;
@@ -305,10 +306,27 @@ async fn mylist(
             UserWatchStatus::Watching => (),
             _ => continue,
         };
-        let title: String = if a.alternative_titles.en.as_ref().and_then(|t| Some(t.contains(&a.title))).unwrap_or(false) {
+        let title: String = if a.alternative_titles.en.as_ref().and_then(|t| Some(t.to_lowercase().contains(&a.title.to_lowercase()))).unwrap_or(false) || a.alternative_titles.en.as_ref()
+            .and_then(|t| 
+                Some(
+                    gestalt_ratio(
+                        &t.replace("Season", "").to_lowercase(),
+                        &a.title.replace("Season", "").to_lowercase()
+                        ) > 0.7))
+            .unwrap_or(false) {
             a.alternative_titles.en.clone().unwrap()
         } else if a.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
             format!("{} ({})", (a.alternative_titles.en.as_ref().unwrap()), (&a.title).clone())
+        } else if a.alternative_titles.synonyms.as_ref()
+            .and_then(|s| if s.len() > 0 { Some(s) } else { None })
+            .and_then(|s| 
+                Some(
+                    gestalt_ratio(
+                        &s[0].replace("Season", "").to_lowercase(),
+                        &a.title.replace("Season", "").to_lowercase()
+                    ) < 0.5))
+                .unwrap_or(false) {
+            format!("{} ({})", (a.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&a.title).clone())
         } else {
             a.title.clone()
         };
