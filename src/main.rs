@@ -33,7 +33,7 @@ use tracing_subscriber;
 mod my_mal;
 use crate::my_mal::*;
 
-const PORT: i32 = 9090;
+const PORT: u32 = 9090;
 const MAL_API: &str = "https://api.myanimelist.net/v2";
 const MAL_WEB: &str = "https://www.myanimelist.net";
 
@@ -53,6 +53,10 @@ pub struct AuthRequest {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
+    let port: u32 = match env::var("PORT".to_string()) {
+        Ok(p) => p.parse().unwrap_or(PORT),
+        _ => PORT,
+    };
     let client_id = ClientId::new(env::var("CLIENT_ID".to_string())?);
     let client_secret = Some(ClientSecret::new(env::var("CLIENT_SECRET")?));
     let auth_url = AuthUrl::new(env::var("AUTH_URL")?)?;
@@ -90,8 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/mylist", web::get().to(mylist))
             .route("/updatelist", web::get().to(update_list))
     })
-    .bind(format!("127.0.0.1:{}", PORT))
-    .expect(&format!("Can not bind to port {}", PORT))
+    .bind(format!("127.0.0.1:{}", port))
+    .expect(&format!("Can not bind to port {}", port))
     .run()
     .await?;
     Ok(())
