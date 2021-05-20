@@ -71,7 +71,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .data(AppState {
                 oauth_client: client.clone(),
             })
-            .service(Files::new("/static", "./static").prefer_utf8(true).use_etag(true))
+            .service(
+                Files::new("/static", "./static")
+                    .prefer_utf8(true)
+                    .use_etag(true),
+            )
             .wrap(
                 CookieSession::signed(&[0; 32])
                     .domain("mal.camcope.me")
@@ -292,14 +296,21 @@ async fn mylist(
     data: web::Data<AppState>,
 ) -> Result<actix_web::HttpResponse, Error> {
     event!(Level::INFO, "entered mylist route");
-    let anime: Vec<AnimeListEntry> =
-        serde_json::from_reader(&File::open("./data/animelist.json")?)
-            .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
+    let anime: Vec<AnimeListEntry> = serde_json::from_reader(&File::open("./data/animelist.json")?)
+        .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
 
-    let table_columns = ["".to_string(), "Title".to_string(), "Rating".to_string(), "Aired".to_string()].join("</th><th>");
+    let table_columns = [
+        "".to_string(),
+        "Title".to_string(),
+        "Rating".to_string(),
+        "Aired".to_string(),
+    ]
+    .join("</th><th>");
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
         match a.my_list_status.as_ref()
+        // Only show watched or watching shows
+        // TODO: Make this filterable in the UI
             .and_then(|l| Some(&l.status))
             .unwrap_or(&UserWatchStatus::Other("None".to_string())) {
             UserWatchStatus::Completed => (),
@@ -331,19 +342,27 @@ async fn mylist(
             a.title.clone()
         };
         let rating: String = match &a.my_list_status {
-            Some(s) => if s.score > 0 { format!("{}", s.score.clone()) } else { "".to_string() },
+            Some(s) => {
+                if s.score > 0 {
+                    format!("{}", s.score.clone())
+                } else {
+                    "".to_string()
+                }
+            }
             _ => "".to_string(),
         };
         anime_table_contents.push_str("<tr><td>");
         let pic: String = match &a.main_picture.medium {
-           Some(s) => format!(r#"<img src="{}" style="height:5vw">"#, s.clone()),
-           _ => "".to_string(),
+            Some(s) => format!(r#"<img src="{}" style="height:5vw">"#, s.clone()),
+            _ => "".to_string(),
         };
         let row = vec![
             pic,
             title,
             rating,
-            a.start_date.and_then(|d| Some(d.to_string())).unwrap_or("".to_string()),
+            a.start_date
+                .and_then(|d| Some(d.to_string()))
+                .unwrap_or("".to_string()),
         ];
         let row_s: String = row.join("</td><td>").into();
         anime_table_contents.push_str(&row_s);
@@ -367,8 +386,7 @@ async fn mylist(
             </table>
         </body>
     </html>"#,
-        table_columns,
-        anime_table_contents,
+        table_columns, anime_table_contents,
     );
     Ok(HttpResponse::Ok()
         .insert_header(ContentType(TEXT_HTML_UTF_8))
@@ -406,9 +424,7 @@ async fn update_list(
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     event!(Level::DEBUG, "raw result:\n{:#?}", &res_text);
     let anime: Vec<AnimeListEntry> = serde_json::from_str(&res_text)
-        .and_then(|r: MyAnimeListResponse| Ok(r.data.into_iter()
-            .map(|x| x.node)
-            .collect()))
+        .and_then(|r: MyAnimeListResponse| Ok(r.data.into_iter().map(|x| x.node).collect()))
         .map_err(|e| {
             error!("fetch failed, {}", &e);
             error::ErrorInternalServerError(web::Json(res_text))
