@@ -35,6 +35,7 @@ use crate::my_mal::*;
 
 const PORT: i32 = 9090;
 const MAL_API: &str = "https://api.myanimelist.net/v2";
+const MAL_WEB: &str = "https://www.myanimelist.net";
 
 #[derive(Debug)]
 pub struct AppState {
@@ -94,6 +95,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .run()
     .await?;
     Ok(())
+}
+
+
+fn linkify(text: &str, link: &str) -> String {
+    format!("<a href=\"{}\">{}</a>", link, text)
 }
 
 #[instrument(skip(session))]
@@ -347,6 +353,7 @@ async fn mylist(
         } else {
             a.title.clone()
         };
+        let title_with_link = linkify(&title, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
         let rating: String = match &a.my_list_status {
             Some(s) => {
                 if s.score > 0 {
@@ -362,9 +369,10 @@ async fn mylist(
             Some(s) => format!(r#"<img src="{}" style="height:5vw">"#, s.clone()),
             _ => "".to_string(),
         };
+        let pic_with_link = linkify(&pic, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
         let row = vec![
-            pic,
-            title,
+            pic_with_link,
+            title_with_link,
             rating,
             a.start_date
                 .and_then(|d| Some(d.to_string()))
