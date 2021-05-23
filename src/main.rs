@@ -355,7 +355,7 @@ async fn mylist(
                         &a.title.replace("Season", "").to_lowercase()
                     ) < 0.5))
                 .unwrap_or(false) {
-            format!("{} ({})", (a.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&a.title).clone())
+            format!("{}<br />({})", (a.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&a.title).clone())
         } else {
             a.title.clone()
         };
