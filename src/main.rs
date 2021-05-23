@@ -345,7 +345,7 @@ async fn mylist(
             .unwrap_or(false) {
             a.alternative_titles.en.clone().unwrap()
         } else if a.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
-            format!("{} ({})", (a.alternative_titles.en.as_ref().unwrap()), (&a.title).clone())
+            format!("{}<br />({})", (a.alternative_titles.en.as_ref().unwrap()), (&a.title).clone())
         } else if a.alternative_titles.synonyms.as_ref()
             .and_then(|s| if s.len() > 0 { Some(s) } else { None })
             .and_then(|s| 
