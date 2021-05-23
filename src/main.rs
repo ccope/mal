@@ -318,6 +318,8 @@ async fn mylist(
     let table_columns = [
         "".to_string(),
         "Title".to_string(),
+        "Genres".to_string(),
+        "Tags".to_string(),
         "Rating".to_string(),
         "Aired".to_string(),
     ]
@@ -358,6 +360,11 @@ async fn mylist(
             a.title.clone()
         };
         let title_with_link = linkify(&title, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
+        let genres = a.genres.iter().map(|g: &MALGenre| g.name.clone()).collect::<Vec<String>>().join(", ");
+        let tags = match &a.my_list_status.as_ref().and_then(|l| l.tags.as_ref()) {
+            Some(t) => t.join(", "),
+            _ => "".to_string(),
+        };
         let rating: String = match &a.my_list_status {
             Some(s) => {
                 if s.score > 0 {
@@ -377,6 +384,8 @@ async fn mylist(
         let row = vec![
             pic_with_link,
             title_with_link,
+            genres,
+            tags,
             rating,
             a.start_date
                 .and_then(|d| Some(d.to_string()))
@@ -422,7 +431,7 @@ async fn update_list(
         .get(&(MAL_API.to_string() + "/users/@me/animelist"))
         .query(&[
             ("limit", "1000"),
-            ("fields", "id,title,alternative_titles,my_list_status,start_date"),
+            ("fields", "id,title,alternative_titles,genres,media_type,num_episodes,synopsis,my_list_status{status,score,start_date,tags,updated_at},start_date"),
             //("nsfw", "true"),
         ])
         .bearer_auth(token.access_token().secret())

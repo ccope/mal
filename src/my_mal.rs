@@ -11,11 +11,21 @@ pub struct AnimeListEntryPictures {
     pub large: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MALGenre {
+    pub id: i64,
+    pub name: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnimeListEntry {
     pub id: i64,
     pub title: String,
     pub alternative_titles: MALTitleTypes,
+    pub genres: Vec<MALGenre>,
+    pub media_type: String,
+    pub num_episodes: u16,
+    pub synopsis: String,
     pub main_picture: AnimeListEntryPictures,
     pub my_list_status: Option<UserAnimeListStatus>,
     pub start_date: Option<NaiveDate>,
@@ -36,8 +46,8 @@ pub enum UserWatchStatus {
 pub struct UserAnimeListStatus {
     pub status: UserWatchStatus,
     pub score: u8,
-    pub num_episodes_watched: u64,
-    pub is_rewatching: bool,
+    pub num_episodes_watched: Option<u64>,
+    pub is_rewatching: Option<bool>,
     pub start_date: Option<NaiveDate>,
     pub finish_date: Option<NaiveDate>,
     pub priority: Option<u8>,
