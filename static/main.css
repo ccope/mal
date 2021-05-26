@@ -10,3 +10,7 @@ a:link, a:visited, a:active {
 a:hover {
 	color: white;
 }
+
+img {
+	height: 10vw;
+}

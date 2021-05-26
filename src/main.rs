@@ -382,7 +382,7 @@ async fn mylist(
         };
         anime_table_contents.push_str("<tr><td>");
         let pic: String = match &a.main_picture.medium {
-            Some(s) => format!(r#"<img src="{}" style="height:5vw">"#, s.clone()),
+            Some(s) => format!(r#"<img src="{}">"#, s.clone()),
             _ => "".to_string(),
         };
         let pic_with_link = linkify(&pic, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
