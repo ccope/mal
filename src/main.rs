@@ -306,7 +306,9 @@ async fn auth(
     session.insert("token_expires", expiry).unwrap();
     event!(Level::INFO, "token cookie set");
     session.insert("login", true).unwrap();
-    Ok(HttpResponse::Ok().body(html))
+    Ok(HttpResponse::Ok()
+        .insert_header(ContentType(TEXT_HTML_UTF_8))
+        .body(html))
 }
 
 #[instrument(skip(session))]
