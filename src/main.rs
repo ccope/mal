@@ -132,7 +132,7 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
     let html = format!(
         r#"<html>
         <head>
-          <title>OAuth2 Test</title>
+          <title>MyMAL</title>
           <link rel="stylesheet" href="static/main.css">
         </head>
         <body>
