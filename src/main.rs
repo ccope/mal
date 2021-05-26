@@ -124,9 +124,12 @@ async fn index(session: Session) -> Result<HttpResponse, Error> {
         let token = session
             .get::<StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>("token")
             .unwrap_or(None);
-        if let Some(_) = token {
+        if let Some(t) = token {
             logged_in_content.push(r#"<p><a href="/mylist">Anime List</a>"#.to_string());
             logged_in_content.push(r#"<p><a href="/updatelist">Update List</a>"#.to_string());
+            if std::env::var("RUST_LOG") == Ok("DEBUG".to_string()) {
+                logged_in_content.push(format!("<p>TOKEN IS {:?}", t.access_token().secret()));
+            }
         };
     };
     let html = format!(
