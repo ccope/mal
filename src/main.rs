@@ -358,7 +358,7 @@ async fn mylist(
                     gestalt_ratio(
                         &s[0].replace("Season", "").to_lowercase(),
                         &a.title.replace("Season", "").to_lowercase()
-                    ) < 0.5))
+                    ) < 0.7))
                 .unwrap_or(false) {
             format!("{}<br />({})", (a.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&a.title).clone())
         } else {
