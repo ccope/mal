@@ -19,7 +19,7 @@ use oauth2::{
     EmptyExtraTokenFields,
     PkceCodeChallenge,
     PkceCodeVerifier,
-    //RedirectUrl,
+    RedirectUrl,
     //Scope,
     StandardTokenResponse,
     TokenResponse,
@@ -61,14 +61,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_secret = Some(ClientSecret::new(env::var("CLIENT_SECRET")?));
     let auth_url = AuthUrl::new(env::var("AUTH_URL")?)?;
     let token_url = Some(TokenUrl::new(env::var("TOKEN_URL")?)?);
-    // let redirect_url = RedirectUrl::new(env::var("REDIRECT_URL")?)?;
+    let redirect_url = RedirectUrl::new(env::var("REDIRECT_URL")?)?;
 
     // Create an OAuth2 client by specifying the client ID, client secret, authorization URL and
     // token URL.
     let client = Box::new(
-        BasicClient::new(client_id, client_secret, auth_url, token_url),
+        BasicClient::new(client_id, client_secret, auth_url, token_url)
         // Set the URL the user will be redirected to after the authorization process.
-        // .set_redirect_url(redirect_url)
+        .set_redirect_uri(redirect_url)
     );
 
     HttpServer::new(move || {
