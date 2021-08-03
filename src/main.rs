@@ -230,7 +230,7 @@ async fn login(session: Session, data: web::Data<AppState>) -> impl Responder {
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    event!(Level::INFO, "\n\nCSRF token is {}", csrf_token.secret());
+    event!(Level::DEBUG, "\n\nCSRF token is {}", csrf_token.secret());
     // This is the URL you should redirect the user to, in order to trigger the authorization
     // process.
     HttpResponse::Found()
@@ -266,7 +266,7 @@ async fn auth(
 
     let verifier = session
         .get::<PkceCodeVerifier>("PKCE")?
-        .ok_or_else(|| error::ErrorBadRequest("No PKCE verifier found"))?;
+        .ok_or(error::ErrorBadRequest("No PKCE verifier found"))?;
     let token_req = data
         .oauth_client
         .exchange_code(code)
@@ -279,23 +279,6 @@ async fn auth(
 
     event!(Level::DEBUG, "token {:?}", &token);
 
-    let html = format!(
-        r#"<html>
-        <head>
-          <title>OAuth2 Test</title>
-          <link rel="stylesheet" href="static/main.css">
-        </head>
-        <body>
-            API returned the following csrf state:
-            <pre>{}</pre>
-            API returned the following auth token:
-            <pre>{:?}</pre>
-            <a href="/">Home</a>
-        </body>
-    </html>"#,
-        state.secret(),
-        token.access_token().secret()
-    );
     let expiry: DateTime<Utc> = Utc::now()
         + Duration::from_std(
             token
@@ -307,9 +290,33 @@ async fn auth(
     session.insert("token_expires", expiry).unwrap();
     event!(Level::INFO, "token cookie set");
     session.insert("login", true).unwrap();
-    Ok(HttpResponse::Ok()
-        .insert_header(ContentType(TEXT_HTML_UTF_8))
-        .body(html))
+    match env::var("RUST_LOG".to_string()).unwrap_or("".to_string()).as_str() {
+        "DEBUG" => {
+            let html = format!(
+                r#"<html>
+                <head>
+                  <title>OAuth2 Test</title>
+                  <link rel="stylesheet" href="static/main.css">
+                </head>
+                <body>
+                    API returned the following csrf state:
+                    <pre>{}</pre>
+                    API returned the following auth token:
+                    <pre>{:?}</pre>
+                    <a href="/">Home</a>
+                </body>
+                </html>"#,
+                state.secret(),
+                token.access_token().secret()
+            );
+            return Ok(HttpResponse::Ok().insert_header(ContentType(TEXT_HTML_UTF_8)).body(html))
+        },
+        _ => Ok(HttpResponse::Found()
+            .append_header((header::LOCATION, format!("https://{}", DOMAIN)))
+            .finish()
+        )
+
+    }
 }
 
 #[instrument(skip(session))]
