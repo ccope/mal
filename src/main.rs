@@ -33,6 +33,7 @@ use tracing_subscriber;
 mod my_mal;
 use crate::my_mal::*;
 
+const DOMAIN: &str = "mal.camcope.me";
 const PORT: u32 = 9090;
 const MAL_API: &str = "https://api.myanimelist.net/v2";
 const MAL_WEB: &str = "https://www.myanimelist.net";
@@ -83,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .wrap(
                 CookieSession::signed(&[0; 32])
-                    .domain("mal.camcope.me")
+                    .domain(DOMAIN)
                     .name("mal")
                     .secure(false),
             )
