@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "*"
-actix-files = "0.6.0-beta.4"
-actix-web = "4.0.0-beta.6"
-actix-session = "0.5.0-beta.1"
+actix-files = "0.6.0-beta.6"
+actix-web = "4.0.0-beta.8"
+actix-session = "0.5.0-beta.2"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
 futures = "*"
@@ -27,12 +27,3 @@ tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = "0.2"
 url = "*"
-
-[patch.crates-io]
-actix-files = { path = "vendor/actix-web/actix-files" }
-actix-http = { path = "vendor/actix-web/actix-http" }
-actix-service = { git = "https://github.com/actix/actix-net" }
-actix-session = { path = "./vendor/actix-extras/actix-session" }
-#actix-web = { git = "https://github.com/actix/actix-web", rev = "6a29a50f25fd103c61e93d97dbee5745640bb911", default_features = false, features = ["cookies"] }
-actix-web = { path = "vendor/actix-web", default_features = false, features = ["cookies"] }
-indexmap = { git = "https://github.com/cuviper/indexmap.git", branch = "hashbrown-0.11" }
