@@ -385,6 +385,13 @@ fn make_anime_row(anime: &AnimeListEntry) -> String {
     format!("<tr><td>{}</td></tr>", row.join("</td><td>"))
 }
 
+fn append_column(columns: &mut Vec<String>, column: String, tag: Option<String>) {
+    match tag {
+        Some(t) => columns.push(format!("<th {}>{}</th>", t, column)),
+        None => columns.push(format!("<th>{}</th>", column)),
+    }
+}
+
 async fn mylist(
     data: web::Data<AppState>,
 ) -> Result<actix_web::HttpResponse, Error> {
@@ -392,15 +399,13 @@ async fn mylist(
     let anime: Vec<AnimeListEntry> = serde_json::from_reader(&File::open("./data/animelist.json")?)
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
 
-    let table_columns = [
-        "".to_string(),
-        "Title".to_string(),
-        "Genres".to_string(),
-        "Tags".to_string(),
-        "Rating".to_string(),
-        "Aired".to_string(),
-    ]
-    .join("</th><th>");
+    let mut table_columns: Vec<String> = Vec::new();
+    append_column(&mut table_columns, "".to_string(), None);
+    append_column(&mut table_columns, "Title".to_string(), Some("class=\"sorttable_alpha\"".to_string()));
+    append_column(&mut table_columns, "Genres".to_string(), None);
+    append_column(&mut table_columns, "Tags".to_string(), None);
+    append_column(&mut table_columns, "Rating".to_string(), None);
+    append_column(&mut table_columns, "Aired".to_string(), None);
 
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
@@ -427,7 +432,7 @@ async fn mylist(
             <p>
             <table class="sortable">
             <thead>
-              <tr><th>{}</th></tr>
+              <tr>{}</tr>
             </thead>
             <tbody>
             {}
@@ -435,7 +440,7 @@ async fn mylist(
             </table>
         </body>
     </html>"#,
-        table_columns, anime_table_contents,
+        table_columns.join("\n"), anime_table_contents,
     );
     Ok(HttpResponse::Ok()
         .insert_header(ContentType(TEXT_HTML_UTF_8))
