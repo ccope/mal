@@ -401,6 +401,7 @@ async fn mylist(
         "Aired".to_string(),
     ]
     .join("</th><th>");
+
     let mut anime_table_contents = String::with_capacity(1048576);
     for a in anime.iter() {
         match a.my_list_status.as_ref()
