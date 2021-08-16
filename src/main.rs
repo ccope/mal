@@ -175,7 +175,7 @@ async fn get_live_token(
         }
         (Some(t), None) => return refresh_token(&t, data, &session).await,
         _ => return Err(error::ErrorNetworkAuthenticationRequired("no valid token")),
-    };
+    }
 }
 
 #[instrument(skip(session))]
