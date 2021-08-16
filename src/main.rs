@@ -338,14 +338,18 @@ fn select_best_title(anime: &AnimeListEntry) -> String {
         anime.alternative_titles.en.clone().unwrap()
     } else if !anime.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).is_empty() {
         format!("{}<br />({})", (anime.alternative_titles.en.as_ref().unwrap()), (&anime.title).clone())
-    } else if anime.alternative_titles.synonyms.as_ref()
-        .and_then(|s| if s.len() > 0 { Some(s) } else { None })
-        .and_then(|s| Some(are_titles_similar(&s[0], &anime.title)))
-        .unwrap_or(false) {
-            // TODO HACK: check if any synonyms are similar, not just the first
-        format!("{}<br />({})", (anime.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&anime.title).clone())
     } else {
-        anime.title.clone()
+        let similar_synonyms: Vec<&String> = anime.alternative_titles.synonyms.as_ref()
+            .map(|s| s.iter()
+                 .filter(|s| are_titles_similar(s, anime.title.as_ref()))
+                 .collect::<Vec<&String>>())
+            .unwrap_or_else(Vec::<&String>::new);
+        if !similar_synonyms.is_empty() {
+            // TODO HACK: figure out what to do if multiple matches are found
+            format!("{}<br />({})", (similar_synonyms[0].clone()), (&anime.title).clone())
+        } else {
+            anime.title.clone()
+        }
     }
 }
 
