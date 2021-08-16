@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/updatelist", web::get().to(update_list))
     })
     .bind(format!("127.0.0.1:{}", port))
-    .expect(&format!("Can not bind to port {}", port))
+    .unwrap_or_else(|_| panic!("Can not bind to port {}", port))
     .run()
     .await?;
     Ok(())
@@ -199,7 +199,7 @@ async fn refresh_token(
                 .expires_in()
                 .ok_or_else(|| error::ErrorInternalServerError("no token expiry"))?,
         )
-        .map_err(|e| error::ErrorInternalServerError(e))?;
+        .map_err(error::ErrorInternalServerError)?;
     session.insert("token", new_token.clone())?;
     session.insert("token_expires", expiry)?;
     Ok(new_token)
@@ -266,7 +266,7 @@ async fn auth(
 
     let verifier = session
         .get::<PkceCodeVerifier>("PKCE")?
-        .ok_or(error::ErrorBadRequest("No PKCE verifier found"))?;
+        .ok_or_else(|| error::ErrorBadRequest("No PKCE verifier found"))?;
     let token_req = data
         .oauth_client
         .exchange_code(code)
@@ -275,7 +275,7 @@ async fn auth(
     let token = token_req
         .request_async(async_http_client)
         .await
-        .map_err(|e| error::ErrorInternalServerError(e))?;
+        .map_err(error::ErrorInternalServerError)?;
 
     event!(Level::DEBUG, "token {:?}", &token);
 
@@ -290,7 +290,7 @@ async fn auth(
     session.insert("token_expires", expiry).unwrap();
     event!(Level::INFO, "token cookie set");
     session.insert("login", true).unwrap();
-    match env::var("RUST_LOG".to_string()).unwrap_or("".to_string()).as_str() {
+    match env::var("RUST_LOG".to_string()).unwrap_or_else(|_| "".to_string()).as_str() {
         "DEBUG" => {
             let html = format!(
                 r#"<html>
@@ -319,7 +319,7 @@ async fn auth(
     }
 }
 
-fn are_titles_similar(title1: &String, title2: &String) -> bool {
+fn are_titles_similar(title1: &str, title2: &str) -> bool {
     gestalt_ratio(
         &title1.replace("Season", "").to_lowercase(),
         &title2.replace("Season", "").to_lowercase()
@@ -328,15 +328,15 @@ fn are_titles_similar(title1: &String, title2: &String) -> bool {
 
 fn select_best_title(anime: &AnimeListEntry) -> String {
     let en_title_contains_default = anime.alternative_titles.en.as_ref()
-        .and_then(|t| Some(t.to_lowercase().contains(&anime.title.to_lowercase())))
+        .map(|t| t.to_lowercase().contains(&anime.title.to_lowercase()))
         .unwrap_or(false);
     let en_title_is_similar_to_default = anime.alternative_titles.en.as_ref()
-        .and_then(|t| Some(are_titles_similar(&t, &anime.title)))
+        .map(|t| are_titles_similar(t, &anime.title))
         .unwrap_or(false);
 
     if en_title_contains_default || en_title_is_similar_to_default {
         anime.alternative_titles.en.clone().unwrap()
-    } else if anime.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
+    } else if !anime.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).is_empty() {
         format!("{}<br />({})", (anime.alternative_titles.en.as_ref().unwrap()), (&anime.title).clone())
     } else if anime.alternative_titles.synonyms.as_ref()
         .and_then(|s| if s.len() > 0 { Some(s) } else { None })
@@ -350,7 +350,7 @@ fn select_best_title(anime: &AnimeListEntry) -> String {
 }
 
 fn make_anime_row(anime: &AnimeListEntry) -> String {
-    let title: String = select_best_title(&anime);
+    let title: String = select_best_title(anime);
     let title_with_link = linkify(&title, format!("{}/anime/{}", &MAL_WEB, &anime.id).as_ref());
     let genres = anime.genres.iter().map(|g: &MALGenre| g.name.clone()).collect::<Vec<String>>().join(", ");
     let tags = match &anime.my_list_status.as_ref().and_then(|l| l.tags.as_ref()) {
@@ -379,8 +379,8 @@ fn make_anime_row(anime: &AnimeListEntry) -> String {
         tags,
         rating,
         anime.start_date
-            .and_then(|d| Some(d.to_string()))
-            .unwrap_or("".to_string()),
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "".to_string()),
     ];
     format!("<tr><td>{}</td></tr>", row.join("</td><td>"))
 }
@@ -392,9 +392,7 @@ fn append_column(columns: &mut Vec<String>, column: String, tag: Option<String>)
     }
 }
 
-async fn mylist(
-    data: web::Data<AppState>,
-) -> Result<actix_web::HttpResponse, Error> {
+async fn mylist() -> Result<actix_web::HttpResponse, Error> {
     event!(Level::INFO, "entered mylist route");
     let anime: Vec<AnimeListEntry> = serde_json::from_reader(&File::open("./data/animelist.json")?)
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
@@ -412,7 +410,7 @@ async fn mylist(
         match a.my_list_status.as_ref()
         // Only show watched or watching shows
         // TODO: Make this filterable in the UI
-            .and_then(|l| Some(&l.status))
+            .map(|l| &l.status)
             .unwrap_or(&UserWatchStatus::Other("None".to_string())) {
             UserWatchStatus::Completed => (),
             UserWatchStatus::Watching => (),
@@ -478,7 +476,7 @@ async fn update_list(
         .map_err(|e| error::ErrorInternalServerError(e.to_string()))?;
     event!(Level::DEBUG, "raw result:\n{:#?}", &res_text);
     let anime: Vec<AnimeListEntry> = serde_json::from_str(&res_text)
-        .and_then(|r: MyAnimeListResponse| Ok(r.data.into_iter().map(|x| x.node).collect()))
+        .map(|r: MyAnimeListResponse| r.data.into_iter().map(|x| x.node).collect())
         .map_err(|e| {
             error!("fetch failed, {}", &e);
             error::ErrorInternalServerError(web::Json(res_text))
