@@ -74,9 +74,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     HttpServer::new(move || {
         App::new()
-            .data(AppState {
-                oauth_client: client.clone(),
-            })
+            .app_data(web::Data::new(AppState {
+                oauth_client: client.clone()
+            }))
             .service(
                 Files::new("/static", "./static")
                     .prefer_utf8(true)
