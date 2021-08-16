@@ -319,6 +319,72 @@ async fn auth(
     }
 }
 
+fn are_titles_similar(title1: &String, title2: &String) -> bool {
+    gestalt_ratio(
+        &title1.replace("Season", "").to_lowercase(),
+        &title2.replace("Season", "").to_lowercase()
+        ) > 0.7
+}
+
+fn select_best_title(anime: &AnimeListEntry) -> String {
+    let en_title_contains_default = anime.alternative_titles.en.as_ref()
+        .and_then(|t| Some(t.to_lowercase().contains(&anime.title.to_lowercase())))
+        .unwrap_or(false);
+    let en_title_is_similar_to_default = anime.alternative_titles.en.as_ref()
+        .and_then(|t| Some(are_titles_similar(&t, &anime.title)))
+        .unwrap_or(false);
+
+    if en_title_contains_default || en_title_is_similar_to_default {
+        anime.alternative_titles.en.clone().unwrap()
+    } else if anime.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
+        format!("{}<br />({})", (anime.alternative_titles.en.as_ref().unwrap()), (&anime.title).clone())
+    } else if anime.alternative_titles.synonyms.as_ref()
+        .and_then(|s| if s.len() > 0 { Some(s) } else { None })
+        .and_then(|s| Some(are_titles_similar(&s[0], &anime.title)))
+        .unwrap_or(false) {
+            // TODO HACK: check if any synonyms are similar, not just the first
+        format!("{}<br />({})", (anime.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&anime.title).clone())
+    } else {
+        anime.title.clone()
+    }
+}
+
+fn make_anime_row(anime: &AnimeListEntry) -> String {
+    let title: String = select_best_title(&anime);
+    let title_with_link = linkify(&title, format!("{}/anime/{}", &MAL_WEB, &anime.id).as_ref());
+    let genres = anime.genres.iter().map(|g: &MALGenre| g.name.clone()).collect::<Vec<String>>().join(", ");
+    let tags = match &anime.my_list_status.as_ref().and_then(|l| l.tags.as_ref()) {
+        Some(t) => t.join(", "),
+        _ => "".to_string(),
+    };
+    let rating: String = match &anime.my_list_status {
+        Some(s) => {
+            if s.score > 0 {
+                format!("{}", s.score.clone())
+            } else {
+                "".to_string()
+            }
+        }
+        _ => "".to_string(),
+    };
+    let pic: String = match &anime.main_picture.medium {
+        Some(s) => format!(r#"<img src="{}">"#, s.clone()),
+        _ => "".to_string(),
+    };
+    let pic_with_link = linkify(&pic, format!("{}/anime/{}", &MAL_WEB, &anime.id).as_ref());
+    let row = vec![
+        pic_with_link,
+        title_with_link,
+        genres,
+        tags,
+        rating,
+        anime.start_date
+            .and_then(|d| Some(d.to_string()))
+            .unwrap_or("".to_string()),
+    ];
+    format!("<tr><td>{}</td></tr>", row.join("</td><td>"))
+}
+
 async fn mylist(
     data: web::Data<AppState>,
 ) -> Result<actix_web::HttpResponse, Error> {
@@ -346,65 +412,8 @@ async fn mylist(
             UserWatchStatus::Watching => (),
             _ => continue,
         };
-        let title: String = if a.alternative_titles.en.as_ref().and_then(|t| Some(t.to_lowercase().contains(&a.title.to_lowercase()))).unwrap_or(false) || a.alternative_titles.en.as_ref()
-            .and_then(|t| 
-                Some(
-                    gestalt_ratio(
-                        &t.replace("Season", "").to_lowercase(),
-                        &a.title.replace("Season", "").to_lowercase()
-                        ) > 0.7))
-            .unwrap_or(false) {
-            a.alternative_titles.en.clone().unwrap()
-        } else if a.alternative_titles.en.as_ref().unwrap_or(&"".to_string()).len() > 0 {
-            format!("{}<br />({})", (a.alternative_titles.en.as_ref().unwrap()), (&a.title).clone())
-        } else if a.alternative_titles.synonyms.as_ref()
-            .and_then(|s| if s.len() > 0 { Some(s) } else { None })
-            .and_then(|s| 
-                Some(
-                    gestalt_ratio(
-                        &s[0].replace("Season", "").to_lowercase(),
-                        &a.title.replace("Season", "").to_lowercase()
-                    ) < 0.7))
-                .unwrap_or(false) {
-            format!("{}<br />({})", (a.alternative_titles.synonyms.as_ref().unwrap()[0].clone()), (&a.title).clone())
-        } else {
-            a.title.clone()
-        };
-        let title_with_link = linkify(&title, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
-        let genres = a.genres.iter().map(|g: &MALGenre| g.name.clone()).collect::<Vec<String>>().join(", ");
-        let tags = match &a.my_list_status.as_ref().and_then(|l| l.tags.as_ref()) {
-            Some(t) => t.join(", "),
-            _ => "".to_string(),
-        };
-        let rating: String = match &a.my_list_status {
-            Some(s) => {
-                if s.score > 0 {
-                    format!("{}", s.score.clone())
-                } else {
-                    "".to_string()
-                }
-            }
-            _ => "".to_string(),
-        };
-        anime_table_contents.push_str("<tr><td>");
-        let pic: String = match &a.main_picture.medium {
-            Some(s) => format!(r#"<img src="{}">"#, s.clone()),
-            _ => "".to_string(),
-        };
-        let pic_with_link = linkify(&pic, format!("{}/anime/{}", &MAL_WEB, &a.id).as_ref());
-        let row = vec![
-            pic_with_link,
-            title_with_link,
-            genres,
-            tags,
-            rating,
-            a.start_date
-                .and_then(|d| Some(d.to_string()))
-                .unwrap_or("".to_string()),
-        ];
-        let row_s: String = row.join("</td><td>").into();
+        let row_s = make_anime_row(a);
         anime_table_contents.push_str(&row_s);
-        anime_table_contents.push_str("</td></tr>");
     }
     let html = format!(
         r#"<html>
