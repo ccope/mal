@@ -319,9 +319,7 @@ async fn auth(
     }
 }
 
-#[instrument(skip(session))]
 async fn mylist(
-    session: Session,
     data: web::Data<AppState>,
 ) -> Result<actix_web::HttpResponse, Error> {
     event!(Level::INFO, "entered mylist route");
