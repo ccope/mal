@@ -15,3 +15,11 @@ img {
 	height: 10vw;
 	max-width: 7vw;
 }
+
+table, thead, td {
+        border: 1px solid white;
+}
+
+td {
+        padding: 5px;
+}
