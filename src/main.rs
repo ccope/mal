@@ -7,6 +7,7 @@ use chrono::prelude::*;
 use chrono::Duration;
 use dotenv::dotenv;
 use gestalt_ratio::gestalt_ratio;
+use listenfd::ListenFd;
 use mime::TEXT_HTML_UTF_8;
 use oauth2::basic::{BasicClient, BasicTokenType};
 use oauth2::reqwest::async_http_client;
@@ -72,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .set_redirect_uri(redirect_url)
     );
 
-    HttpServer::new(move || {
+    let mut server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(AppState {
                 oauth_client: client.clone()
@@ -94,11 +95,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/auth", web::get().to(auth))
             .route("/mylist", web::get().to(mylist))
             .route("/updatelist", web::get().to(update_list))
-    })
-    .bind(format!("127.0.0.1:{}", port))
-    .unwrap_or_else(|_| panic!("Can not bind to port {}", port))
-    .run()
-    .await?;
+    });
+    let mut listenfd = ListenFd::from_env();
+    server = if let Some(listener) = listenfd.take_tcp_listener(0)? {
+        server.listen(listener)
+    // otherwise fall back to local listening
+    } else {
+        server.bind(format!("127.0.0.1:{}", port))
+    }
+    .unwrap_or_else(|_| panic!("Can not bind to port {}", port));
+
+    server.run().await?;
     Ok(())
 }
 
